@@ -15,6 +15,7 @@ class CameraDeviceConfig(AppConfig):
         """
         from care.emr.registries.device_type.device_registry import DeviceTypeRegistry
         from camera_device.device import CameraDevice
+        from camera_device.permissions import CameraDeviceControlPermissions, CameraDeviceControlAccess # noqa: F401
 
         try:
             DeviceTypeRegistry.get_care_device_class("gateway")

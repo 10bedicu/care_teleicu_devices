@@ -1,7 +1,7 @@
+from gateway_device.utils import validate_endpoint_address
 from pydantic import BaseModel, field_validator
 
 from care.emr.resources.device.spec import DeviceListSpec
-from gateway_device.utils import validate_endpoint_address
 
 
 class GatewayDeviceReadSpec(DeviceListSpec):
@@ -10,7 +10,7 @@ class GatewayDeviceReadSpec(DeviceListSpec):
 
 class GatewayDeviceMetadataReadSpec(BaseModel):
     endpoint_address: str | None = None
-    insecure_connection: bool | None = False
+    insecure: bool | None = False
 
 
 class GatewayDeviceMetadataWriteSpec(BaseModel):

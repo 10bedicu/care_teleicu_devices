@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter, SimpleRouter
 
 from camera_device.viewsets.actions import CameraActionsViewSet
 from camera_device.viewsets.position_preset import CameraPositionPresetViewSet
-from camera_device.viewsets.preset_location_camera import PresetLocationCameraViewSet
+from camera_device.viewsets.preset_encounter_camera import PresetEncounterCameraViewSet
 
 router = DefaultRouter() if settings.DEBUG else SimpleRouter()
 
@@ -14,9 +14,9 @@ router.register(
     basename="camera-position-presets",
 )
 router.register(
-    r"preset_location_cameras/(?P<location_external_id>[^/.]+)",
-    PresetLocationCameraViewSet,
-    basename="preset-location-cameras",
+    r"preset_encounter_cameras/(?P<encounter_external_id>[^/.]+)",
+    PresetEncounterCameraViewSet,
+    basename="preset-encounter-cameras",
 )
 
 urlpatterns = router.urls

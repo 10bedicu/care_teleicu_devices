@@ -101,6 +101,7 @@ REQUIRED_SETTINGS = {
 }
 
 DEFAULTS = {
+    "CARE_TELEICU_GATEWAY_API_TIMEOUT": 25,
 }
 
 plugin_settings = PluginSettings(

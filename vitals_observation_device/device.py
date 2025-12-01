@@ -35,8 +35,7 @@ class VitalsObservationDevice(DeviceTypeBase):
     def retrieve(self, obj):
         metadata = obj.metadata
         gateway = self.get_gateway_device(obj)
-        if gateway:
-            metadata["gateway"] = GatewayDeviceReadSpec.serialize(gateway)
+        metadata["gateway"] = GatewayDeviceReadSpec.serialize(gateway) if gateway else None
         return VitalsObservationDeviceMetadataReadSpec(**metadata).model_dump(
             mode="json"
         )

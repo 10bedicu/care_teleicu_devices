@@ -34,8 +34,7 @@ class CameraDevice(DeviceTypeBase):
     def retrieve(self, obj):
         metadata = obj.metadata
         gateway = self.get_gateway_device(obj)
-        if gateway:
-            metadata["gateway"] = GatewayDeviceReadSpec.serialize(gateway)
+        metadata["gateway"] = GatewayDeviceReadSpec.serialize(gateway) if gateway else None
         return CameraDeviceMetadataReadSpec(**metadata).model_dump(mode="json")
 
     def perform_action(self, obj, action, request):
