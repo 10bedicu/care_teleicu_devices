@@ -3,7 +3,7 @@ import uuid
 
 import hl7
 from drf_spectacular.utils import extend_schema
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -64,6 +64,10 @@ class DeviceConfigSpec(BaseModel):
     flow_control: str | None = None
 
 
+class DeviceConfigListResponse(RootModel[list[DeviceConfigSpec]]):
+    pass
+
+
 class LabAnalyzerCommunicationViewSet(GenericViewSet):
     """
     Gateway-authenticated endpoints for inbound lab analyzer communication.
@@ -80,7 +84,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
 
     @extend_schema(
         description="List all lab analyzer devices configured for this gateway.",
-        responses={200: list[DeviceConfigSpec]},
+        responses={200: DeviceConfigListResponse},
     )
     def list(self, request, *args, **kwargs):
         """Return configured devices for the authenticated gateway."""
