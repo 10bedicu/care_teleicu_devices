@@ -262,6 +262,10 @@ class DeviceActivityDefinitionCreateSpec(EMRResource):
         obj.activity_definition = ActivityDefinition.objects.get(
             external_id=self.activity_definition_external_id,
         )
+        if obj.activity_definition.facility_id != obj.device.facility_id:
+            raise ValueError(
+                "Activity definition must belong to the same facility as the device"
+            )
 
 
 class LabMessageReadSpec(EMRResource):

@@ -1,3 +1,5 @@
+from django.core.exceptions import ValidationError
+
 from care.emr.models.device import Device
 from care.emr.registries.device_type.device_registry import DeviceTypeBase
 
@@ -19,6 +21,14 @@ class LabAnalyzerDevice(DeviceTypeBase):
 
     def _write_metadata(self, request_data, obj):
         validated_data = LabAnalyzerDeviceMetadataWriteSpec(**request_data)
+        if validated_data.gateway:
+            gateway = Device.objects.get(
+                external_id=validated_data.gateway, care_type="gateway"
+            )
+            if gateway.facility_id != obj.facility_id:
+                raise ValidationError(
+                    "Gateway device must belong to the same facility"
+                )
         obj.metadata = validated_data.model_dump(mode="json")
         obj.save(update_fields=["metadata"])
         return obj

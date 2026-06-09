@@ -13,10 +13,15 @@ from lab_analyzer_device.astm import codec as astm_codec
 from lab_analyzer_device.astm.devices.registry import registry as astm_registry
 from lab_analyzer_device.astm.extractor import extract_astm_data
 from lab_analyzer_device.authentication import LabAnalyzerAuthentication
+from lab_analyzer_device.authorization import (
+    get_gateway_linked_analyzers,
+    is_context_in_device_facility,
+)
 from lab_analyzer_device.hl7.devices.registry import registry
 from lab_analyzer_device.hl7.extractor import extract_oru_data
 from lab_analyzer_device.models import LabMessage, MessageStatus, MessageType
 from lab_analyzer_device.services import (
+    PatientContext,
     create_diagnostic_report,
     lookup_pending_orders,
     resolve_patient_context,
@@ -71,11 +76,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
     authentication_classes = (LabAnalyzerAuthentication,)
 
     def get_queryset(self):
-        return (
-            super()
-            .get_queryset()
-            .filter(metadata__gateway=str(self.request.gateway.external_id))
-        )
+        return get_gateway_linked_analyzers(self.request.gateway)
 
     @extend_schema(
         description="List all lab analyzer devices configured for this gateway.",
@@ -176,6 +177,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
 
     def _receive_astm_result(self, data, device, device_type, request):
         """Parse and process an ASTM result message."""
+        protocol = device.metadata.get("protocol", "astm")
         records = astm_codec.split_lines(data.raw_message)
         if not records:
             LabMessage.objects.create(
@@ -192,6 +194,14 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
         oru_data = extract_astm_data(records, device_type, device.metadata)
 
         ctx = resolve_patient_context(oru_data, device)
+        if not is_context_in_device_facility(ctx, device):
+            logger.warning(
+                "Resolved patient context outside device facility for gateway=%s device=%s",
+                self.request.gateway.external_id,
+                device.external_id,
+            )
+            ctx = PatientContext()
+
         lab_message = LabMessage.objects.create(
             device=device,
             patient=ctx.patient,
@@ -211,6 +221,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
                     ctx.service_request, request.user,
                     device_type=device_type,
                     protocol=protocol,
+                    device=device,
                 )
                 lab_message.status = MessageStatus.PROCESSED
                 lab_message.save(update_fields=["status"])
@@ -262,6 +273,13 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
                             obs.display = obs.display or mapping.display
 
         ctx = resolve_patient_context(oru_data, device)
+        if not is_context_in_device_facility(ctx, device):
+            logger.warning(
+                "Resolved patient context outside device facility for gateway=%s device=%s",
+                self.request.gateway.external_id,
+                device.external_id,
+            )
+            ctx = PatientContext()
 
         lab_message = LabMessage.objects.create(
             device=device,
@@ -282,6 +300,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
                     ctx.service_request, request.user,
                     device_type=device_type,
                     protocol=protocol,
+                    device=device,
                 )
                 lab_message.status = MessageStatus.PROCESSED
                 lab_message.save(update_fields=["status"])

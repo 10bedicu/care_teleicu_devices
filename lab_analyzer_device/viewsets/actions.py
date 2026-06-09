@@ -9,6 +9,7 @@ from rest_framework.viewsets import GenericViewSet
 
 from care.emr.models import Device
 from gateway_device.client import GatewayClient
+from lab_analyzer_device.authorization import authorize_manage_lab_analyzer
 from lab_analyzer_device.hl7.devices.registry import registry
 from lab_analyzer_device.models import MessageStatus
 from lab_analyzer_device.services import build_order
@@ -52,6 +53,10 @@ class LabAnalyzerActionsViewSet(GenericViewSet):
             )
         except Device.DoesNotExist as e:
             raise ValidationError("Gateway device not found") from e
+        if gateway_device.facility_id != device.facility_id:
+            raise ValidationError(
+                "Gateway device must belong to the same facility as the lab analyzer"
+            )
         return GatewayClient(gateway_device)
 
     @extend_schema(request=SendOrderRequest)
@@ -59,6 +64,7 @@ class LabAnalyzerActionsViewSet(GenericViewSet):
     def send_order(self, request, *args, **kwargs):
         """Send an ORM order to a lab analyzer via the gateway."""
         device = self.get_object()
+        authorize_manage_lab_analyzer(request.user, device)
 
         # Reject orders to unidirectional (results-only) devices
         device_type = device.metadata.get("type", "generic")

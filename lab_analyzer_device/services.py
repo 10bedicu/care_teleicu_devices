@@ -17,6 +17,10 @@ from care.emr.models import (
 from care.emr.models.observation_definition import ObservationDefinition
 from care.emr.resources.observation_definition.observation import convert_od_to_observation
 from care.emr.utils.compute_observation_interpretation import compute_observation_interpretation
+from lab_analyzer_device.authorization import (
+    assert_entity_in_device_facility,
+    filter_specimens_for_device,
+)
 from lab_analyzer_device.hl7.builder import ORMData, OrderedTest, OrderingPhysician, build_orm_message
 from lab_analyzer_device.hl7.devices.registry import registry
 from lab_analyzer_device.hl7.extractor import ORUData
@@ -44,17 +48,12 @@ def resolve_patient_context(oru_data, device) -> PatientContext:
 
     sample_id = oru_data.filler_order_number or oru_data.specimen_id
     if sample_id:
-        specimen = (
-            Specimen.objects.select_related("patient", "encounter", "service_request")
-            .filter(accession_identifier=sample_id)
-            .first()
+        specimen_qs = filter_specimens_for_device(device).select_related(
+            "patient", "encounter", "service_request"
         )
+        specimen = specimen_qs.filter(accession_identifier=sample_id).first()
         if not specimen and sample_id.isdigit():
-            specimen = (
-                Specimen.objects.select_related("patient", "encounter", "service_request")
-                .filter(id=int(sample_id))
-                .first()
-            )
+            specimen = specimen_qs.filter(id=int(sample_id)).first()
         if specimen:
             ctx.specimen = specimen
             ctx.patient = specimen.patient
@@ -192,7 +191,16 @@ def _build_components(oru_data, observation_definition, device_type=None, protoc
     return components
 
 
-def create_diagnostic_report(oru_data, patient, encounter, service_request, user, device_type=None, protocol=None):
+def create_diagnostic_report(
+    oru_data,
+    patient,
+    encounter,
+    service_request,
+    user,
+    device_type=None,
+    protocol=None,
+    device=None,
+):
     """
     Create or update a DiagnosticReport from parsed ORU data.
 
@@ -205,6 +213,10 @@ def create_diagnostic_report(oru_data, patient, encounter, service_request, user
     if not service_request:
         logger.warning("No ServiceRequest found for lab result, skipping DiagnosticReport creation")
         return None
+
+    if device:
+        assert_entity_in_device_facility(encounter, device, "Encounter")
+        assert_entity_in_device_facility(service_request, device, "Service request")
 
     existing_report = (
         DiagnosticReport.objects.filter(service_request=service_request)
@@ -315,7 +327,12 @@ def lookup_pending_orders(sample_ids: list[str], device=None) -> tuple[list[ORUD
 
     for sample_id in sample_ids:
         specimen = (
-            Specimen.objects.select_related("patient", "encounter", "service_request")
+            filter_specimens_for_device(device)
+            .select_related("patient", "encounter", "service_request")
+            .filter(accession_identifier=sample_id)
+            .first()
+            if device
+            else Specimen.objects.select_related("patient", "encounter", "service_request")
             .filter(accession_identifier=sample_id)
             .first()
         )
@@ -419,23 +436,27 @@ def build_order(
     encounter = None
     specimen = None
 
+    service_request = None
+
     if encounter_external_id:
         encounter = Encounter.objects.filter(
-            external_id=encounter_external_id
+            external_id=encounter_external_id,
+            facility=device.facility,
         ).first()
         if encounter:
             patient = encounter.patient
     if not patient:
         patient = Patient.objects.filter(external_id=patient_id).first()
     if specimen_external_id:
-        specimen = Specimen.objects.filter(
+        specimen = filter_specimens_for_device(device).filter(
             external_id=specimen_external_id
         ).first()
 
     ordering_physician = None
     if service_request_external_id:
         service_request = ServiceRequest.objects.select_related("requester").filter(
-            external_id=service_request_external_id
+            external_id=service_request_external_id,
+            facility=device.facility,
         ).first()
         if service_request and service_request.requester:
             user = service_request.requester
@@ -446,10 +467,14 @@ def build_order(
             )
         # Fallback: find specimen via service request if not already resolved
         if not specimen and service_request:
-            specimen = Specimen.objects.filter(
+            specimen = filter_specimens_for_device(device).filter(
                 service_request=service_request,
                 status__in=["available", "draft"],
             ).first()
+
+    assert_entity_in_device_facility(encounter, device, "Encounter")
+    assert_entity_in_device_facility(specimen, device, "Specimen")
+    assert_entity_in_device_facility(service_request, device, "Service request")
 
     # Build HL7 ORM
     patient_name = patient.name if patient else ""
