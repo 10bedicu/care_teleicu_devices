@@ -96,6 +96,8 @@ class GatewayClient:
                 {"error": "Invalid JSON response from gateway device"},
                 status.HTTP_502_BAD_GATEWAY,
             ) from e
+        except APIException:
+            raise
         except Exception as e:
             logger.error(f"Unexpected error during gateway request: {str(e)}")
             raise APIException(
