@@ -88,11 +88,13 @@ class GatewayAuthentication(JWTAuthentication):
         if not gateway.metadata and not gateway.metadata.get("endpoint_address"):
             raise InvalidToken({"detail": "Gateway endpoint not configured"})
 
-        protocol = "http" if gateway.metadata.get("insecure", False) else "https"
-
-        open_id_url = (
-            f"{protocol}://{gateway.metadata['endpoint_address']}/openid-configuration/"
-        )
+        if jwks_url := gateway.metadata.get("jwks_url"):
+            open_id_url = jwks_url
+        else:
+            protocol = "http" if gateway.metadata.get("insecure", False) else "https"
+            open_id_url = (
+                f"{protocol}://{gateway.metadata['endpoint_address']}/openid-configuration/"
+            )
 
         validated_token = self.get_validated_token(open_id_url, raw_token)
 
