@@ -157,7 +157,11 @@ class AdxAutoChem200Profile(DeviceHL7Profile):
         return code, display
 
     def build_worklist_response(
-        self, orders: list[ORUData], original_control_id: str
+        self,
+        orders: list[ORUData],
+        original_control_id: str,
+        *,
+        raw_query: str | None = None,
     ) -> list[str] | None:
         """
         Build ADX AutoChem 200 worklist response as two HL7 messages:

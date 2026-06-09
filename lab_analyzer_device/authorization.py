@@ -27,7 +27,7 @@ def authorize_read_lab_analyzer(user, device):
 
 
 def authorize_manage_lab_analyzer(user, device):
-    if not AuthorizationController.call("can_manage_device", user, device):
+    if not AuthorizationController.call("can_read_device", user, device):
         raise PermissionDenied("You do not have permission to manage this device")
 
 

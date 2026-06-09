@@ -10,6 +10,7 @@ Key characteristics:
 - Results: ORU^R01 with LOINC codes in OBX-3 (system=LN) and 99MRC codes
 - Orders: ORM^O01 worklist query with ORC|RF||<sample_id>||IP
 - Response: ORR^O02 with MSA, PID, PV1, ORC(AF|<sample_id>), OBR, OBX
+  (Blood Mode, Test Mode, Age, optional Remark per §5.5 inquiry response)
 - OBR-4: 00001^Automated Count^99MRC (for CBC results)
 - OBX-2 = NM: numeric results (keep)
 - OBX-2 = ED: histograms/scattergrams (skip)
@@ -18,6 +19,10 @@ Key characteristics:
 - MSH-11: P = sample/worklist, Q = QC data
 - MSH-18: UNICODE (UTF-8)
 - PID-3: patient ID^^^^MR format
+- PID-5: Family^Given (e.g. Jerry^Tom)
+- PID-7: YYYYMMDDHHMMSS (e.g. 19900804000000)
+- PID-8: Male or Female only (not M/F)
+- OBX: 30525-0^Age^LN for patient age in years
 """
 
 from __future__ import annotations
@@ -186,8 +191,59 @@ class MindrayBC5150Profile(DeviceHL7Profile):
         """OBR-3 (Filler Order Number) = sample ID / accession identifier."""
         return hl7_to_str(obr_segment, 3) or None
 
+    def _format_patient_id(self, patient_id: str) -> str:
+        """Format patient ID for Mindray PID-3 (max 20 chars)."""
+        if not patient_id:
+            return ""
+        patient_id = patient_id.strip()[:20]
+        if patient_id.isdigit():
+            return patient_id.zfill(6)
+        return patient_id
+
+    def _format_patient_name(self, patient_name: str) -> str:
+        """Format CARE patient name as Mindray PID-5 Family^Given or ^Given."""
+        if not patient_name:
+            return ""
+        if "^" in patient_name:
+            return patient_name
+        parts = patient_name.split(" ", 1)
+        if len(parts) == 2:
+            return f"{parts[1]}^{parts[0]}"
+        return f"^{parts[0]}"
+
+    def _format_gender(self, gender: str) -> str:
+        """Map gender to Mindray PID-8 — the analyzer only accepts Male or Female."""
+        if gender in ("M", "male", "Male"):
+            return "Male"
+        if gender in ("F", "female", "Female"):
+            return "Female"
+        return ""
+
+    def _normalize_dob(self, date_of_birth: str) -> str:
+        """Ensure DOB is YYYYMMDDHHMMSS as required by Mindray PID-7."""
+        return self._normalize_hl7_datetime(date_of_birth)
+
+    def _normalize_hl7_datetime(self, value: str) -> str:
+        """Normalize CARE/ISO timestamps to Mindray YYYYMMDDHHMMSS."""
+        if not value:
+            return ""
+        value = value.strip()
+        if "T" in value:
+            try:
+                dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                return dt.strftime("%Y%m%d%H%M%S")
+            except ValueError:
+                return ""
+        if len(value) == 8 and value.isdigit():
+            return f"{value}000000"
+        return value
+
     def build_worklist_response(
-        self, orders: list[ORUData], original_control_id: str
+        self,
+        orders: list[ORUData],
+        original_control_id: str,
+        *,
+        raw_query: str | None = None,
     ) -> str | None:
         """
         Build a Mindray BC-5150 specific ORR^O02 worklist response.
@@ -210,10 +266,10 @@ class MindrayBC5150Profile(DeviceHL7Profile):
         segments.append(f"MSA|AA|{original_control_id}")
 
         for order in orders:
-            patient_id = order.patient_id or ""
-            patient_name = order.patient_name or ""
-            date_of_birth = order.date_of_birth or ""
-            gender = order.gender or ""
+            patient_id = self._format_patient_id(order.patient_id or "")
+            patient_name = self._format_patient_name(order.patient_name or "")
+            date_of_birth = self._normalize_dob(order.date_of_birth or "")
+            gender = self._format_gender(order.gender or "")
             sample_id = order.sample_id or ""
             department = order.department or ""
             bed = order.bed or ""
@@ -226,9 +282,10 @@ class MindrayBC5150Profile(DeviceHL7Profile):
             )
             segments.append(f"PV1|1||{department}^^{bed}")
             segments.append(f"ORC|AF|{sample_id}")
+            collect = self._normalize_hl7_datetime(collect_time)
             segments.append(
                 f"OBR|1|{sample_id}||00001^Automated Count^99MRC"
-                f"||{collect_time}||||||||{collect_time}||||||||||HM"
+                f"||{collect}||||||||{collect}||||||||||HM"
             )
 
             obx_idx = 1
@@ -239,6 +296,11 @@ class MindrayBC5150Profile(DeviceHL7Profile):
             segments.append(
                 f"OBX|{obx_idx}|IS|08003^Test Mode^99MRC||{test_mode}||||||F"
             )
+            if order.age is not None:
+                obx_idx += 1
+                segments.append(
+                    f"OBX|{obx_idx}|NM|30525-0^Age^LN||{order.age}|yr|||||F"
+                )
 
         raw = "\r".join(segments)
         message = hl7.parse(raw)

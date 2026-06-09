@@ -459,7 +459,11 @@ class DeviceHL7Profile(ABC):
         return hl7.parse(raw)
 
     def build_worklist_response(
-        self, orders: list[ORUData], original_control_id: str
+        self,
+        orders: list[ORUData],
+        original_control_id: str,
+        *,
+        raw_query: str | None = None,
     ) -> str | list[str] | None:
         """
         Build an ORR^O02 worklist response for a query-based analyzer.

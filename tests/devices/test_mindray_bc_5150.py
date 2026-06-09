@@ -419,6 +419,109 @@ class TestWorklistResponse(unittest.TestCase):
         self.assertIn("08003^Test Mode^99MRC||CBC+DIFF", result)
         self.assertIn("08002^Blood Mode^99MRC||P", result)
 
+    def test_response_formats_pid_gender_name_and_age(self):
+        orders = [
+            {
+                "sample_id": "37",
+                "patient_id": "7393670",
+                "patient_name": "Tom Jerry",
+                "date_of_birth": "19900804",
+                "gender": "M",
+                "department": "ICU",
+                "bed": "BedNO1",
+                "collect_time": "20250115100000",
+                "test_mode": "CBC+DIFF",
+                "blood_mode": "W",
+            }
+        ]
+        result = self.profile.build_worklist_response([ORUData(**o) for o in orders], "1")
+        self.assertIn("PID|1||7393670^^^^MR||Jerry^Tom||19900804000000|Male", result)
+        self.assertIn("||20250115100000||||||||20250115100000||||||||||HM", result)
+        self.assertIn("30525-0^Age^LN||", result)
+        self.assertIn("|yr|||||F", result)
+
+    def test_obr_matches_inquiry_response_format(self):
+        orders = [
+            {
+                "sample_id": "257",
+                "patient_id": "test1",
+                "patient_name": "Tom",
+                "date_of_birth": "20080525000000",
+                "gender": "",
+                "department": "ICU",
+                "bed": "BedNO1",
+                "collect_time": "20090205100000",
+                "test_mode": "CBC",
+                "blood_mode": "W",
+            }
+        ]
+        result = self.profile.build_worklist_response([ORUData(**o) for o in orders], "60")
+        self.assertIn("MSA|AA|60", result)
+        self.assertIn("PID|1||test1^^^^MR||^Tom||20080525000000|", result)
+        self.assertIn("PV1|1||ICU^^BedNO1", result)
+        self.assertIn("ORC|AF|257", result)
+        self.assertIn(
+            "OBR|1|257||00001^Automated Count^99MRC||20090205100000||||||||"
+            "20090205100000||||||||||HM",
+            result,
+        )
+        self.assertIn("08002^Blood Mode^99MRC||W", result)
+        self.assertIn("08003^Test Mode^99MRC||CBC", result)
+
+    def test_zero_pads_numeric_patient_id_in_pid(self):
+        orders = [
+            {
+                "sample_id": "37",
+                "patient_id": "1",
+                "patient_name": "Jagvi Shah",
+                "date_of_birth": "19900730",
+                "gender": "F",
+                "department": "",
+                "bed": "",
+                "collect_time": "",
+                "test_mode": "CBC+DIFF",
+                "blood_mode": "W",
+            }
+        ]
+        result = self.profile.build_worklist_response([ORUData(**o) for o in orders], "3")
+        self.assertIn("PID|1||000001^^^^MR||Shah^Jagvi||", result)
+
+    def test_normalizes_iso_collect_time_in_obr(self):
+        orders = [
+            {
+                "sample_id": "37",
+                "patient_id": "42",
+                "patient_name": "Test Patient",
+                "date_of_birth": "19900101",
+                "gender": "M",
+                "department": "",
+                "bed": "",
+                "collect_time": "2026-06-09T09:50:16.385000Z",
+                "test_mode": "CBC+DIFF",
+                "blood_mode": "W",
+            }
+        ]
+        result = self.profile.build_worklist_response([ORUData(**o) for o in orders], "1")
+        self.assertIn("||20260609095016||||||||20260609095016||||||||||HM", result)
+
+    def test_response_preserves_hl7_name_and_full_gender_label(self):
+        orders = [
+            {
+                "sample_id": "S3",
+                "patient_id": "P3",
+                "patient_name": "Jerry^Tom",
+                "date_of_birth": "19900804000000",
+                "gender": "Female",
+                "department": "",
+                "bed": "",
+                "collect_time": "",
+                "test_mode": "CBC",
+                "blood_mode": "W",
+            }
+        ]
+        result = self.profile.build_worklist_response([ORUData(**o) for o in orders], "CTRL8")
+        self.assertIn("PID|1||P3^^^^MR||Jerry^Tom||19900804000000|Female", result)
+
     def test_empty_orders_returns_none(self):
         result = self.profile.build_worklist_response([], "CTRL5")
         self.assertIsNone(result)

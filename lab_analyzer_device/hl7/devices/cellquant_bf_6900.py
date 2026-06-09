@@ -130,7 +130,11 @@ class CellQuantBF6900Profile(DeviceHL7Profile):
         return hl7_to_str(pid_segment, 3) or None
 
     def build_worklist_response(
-        self, orders: list[ORUData], original_control_id: str
+        self,
+        orders: list[ORUData],
+        original_control_id: str,
+        *,
+        raw_query: str | None = None,
     ) -> str | None:
         """
         Build a CellQuant BF-6900 specific ORR^O02 worklist response.

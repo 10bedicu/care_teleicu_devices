@@ -243,7 +243,11 @@ class HetoAU400Profile(DeviceHL7Profile):
         return hl7_to_str(obr_segment, 2) or None
 
     def build_worklist_response(
-        self, orders: list[ORUData], original_control_id: str
+        self,
+        orders: list[ORUData],
+        original_control_id: str,
+        *,
+        raw_query: str | None = None,
     ) -> list[str] | None:
         """
         Build Heto AU400 worklist response as two HL7 messages:

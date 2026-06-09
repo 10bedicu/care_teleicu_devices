@@ -4,7 +4,14 @@ import unittest
 
 import hl7
 
-from lab_analyzer_device.hl7.extractor import ObservationData, ORUData, hl7_to_str
+from datetime import datetime, timezone
+
+from lab_analyzer_device.hl7.extractor import (
+    ObservationData,
+    ORUData,
+    compute_age_years,
+    hl7_to_str,
+)
 
 
 class TestStrHelper(unittest.TestCase):
@@ -68,6 +75,29 @@ class TestORUDataModel(unittest.TestCase):
         data = ORUData(observations=[obs])
         self.assertEqual(len(data.observations), 1)
         self.assertEqual(data.observations[0].value, "7.2")
+
+    def test_age_computed_from_hl7_dob(self):
+        ref = datetime(2025, 6, 9, tzinfo=timezone.utc)
+        self.assertEqual(
+            compute_age_years("19900804", reference=ref),
+            34,
+        )
+        self.assertEqual(
+            ORUData(date_of_birth="19900804").age,
+            compute_age_years("19900804"),
+        )
+
+    def test_age_computed_from_iso_dob(self):
+        ref = datetime(2025, 1, 15, tzinfo=timezone.utc)
+        self.assertEqual(
+            compute_age_years("2008-05-25T00:00:00", reference=ref),
+            16,
+        )
+
+    def test_age_none_without_dob(self):
+        self.assertIsNone(ORUData().age)
+        self.assertIsNone(compute_age_years(""))
+        self.assertIsNone(compute_age_years("abc"))
 
 
 if __name__ == "__main__":

@@ -1,10 +1,37 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import hl7
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from lab_analyzer_device.hl7.builder import OrderedTest
+
+
+def compute_age_years(
+    date_of_birth: str | None,
+    reference: datetime | None = None,
+) -> int | None:
+    """Compute patient age in whole years from an HL7 or ISO date-of-birth string."""
+    if not date_of_birth or len(date_of_birth) < 4:
+        return None
+    ref = reference or datetime.now(timezone.utc)
+    try:
+        dob = date_of_birth.strip()
+        if "T" in dob:
+            birth = datetime.fromisoformat(dob.replace("Z", "+00:00"))
+            if birth.tzinfo is None:
+                birth = birth.replace(tzinfo=timezone.utc)
+        else:
+            year = int(dob[0:4])
+            month = int(dob[4:6]) if len(dob) >= 6 else 1
+            day = int(dob[6:8]) if len(dob) >= 8 else 1
+            birth = datetime(year, month, day, tzinfo=timezone.utc)
+    except (ValueError, IndexError):
+        return None
+    age = ref.year - birth.year - ((ref.month, ref.day) < (birth.month, birth.day))
+    return age if age >= 0 else None
 
 
 class ObservationData(BaseModel):
@@ -59,6 +86,11 @@ class ORUData(BaseModel):
     test_mode: str | None = None
     blood_mode: str | None = None
     tests: list[OrderedTest] = []
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def age(self) -> int | None:
+        return compute_age_years(self.date_of_birth)
 
 
 def hl7_to_str(segment, field: int, component: int = 0) -> str:
