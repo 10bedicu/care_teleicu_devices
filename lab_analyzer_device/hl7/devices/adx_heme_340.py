@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from lab_analyzer_device.hl7.devices.base import CommunicationMode, DeviceHL7Profile, LoincMapping
 from lab_analyzer_device.hl7.devices.registry import registry
-from lab_analyzer_device.hl7.extractor import _str
+from lab_analyzer_device.hl7.extractor import hl7_to_str
 
 
 class AdxHeme340Profile(DeviceHL7Profile):
@@ -87,16 +87,16 @@ class AdxHeme340Profile(DeviceHL7Profile):
         Keep only NM (numeric) result OBX segments.
         Skip ED (histograms/scattergrams) and IS (mode settings/flags).
         """
-        value_type = _str(segment, 2)
+        value_type = hl7_to_str(segment, 2)
         return value_type != "NM"
 
     def extract_patient_id(self, pid_segment) -> str | None:
         """ADX PID-3 format: ID^^^^MR — first component is the MRN."""
-        return _str(pid_segment, 3, 1) or _str(pid_segment, 3) or None
+        return hl7_to_str(pid_segment, 3, 1) or hl7_to_str(pid_segment, 3) or None
 
     def extract_specimen_from_obr(self, obr_segment) -> str | None:
         """OBR-3 (Filler Order Number) = sample number / accession identifier."""
-        return _str(obr_segment, 3) or None
+        return hl7_to_str(obr_segment, 3) or None
 
 
 registry.register(AdxHeme340Profile)

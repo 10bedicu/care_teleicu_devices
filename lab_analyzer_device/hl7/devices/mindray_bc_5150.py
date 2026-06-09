@@ -33,7 +33,7 @@ from lab_analyzer_device.hl7.devices.base import (
     LoincMapping,
 )
 from lab_analyzer_device.hl7.devices.registry import registry
-from lab_analyzer_device.hl7.extractor import ORUData, _str
+from lab_analyzer_device.hl7.extractor import ORUData, hl7_to_str
 
 
 class MindrayBC5150Profile(DeviceHL7Profile):
@@ -166,13 +166,13 @@ class MindrayBC5150Profile(DeviceHL7Profile):
         Keep only NM (numeric) OBX segments that represent clinical results.
         Skip ED/IS/ST types and NM segments with metadata/discriminator codes.
         """
-        value_type = _str(segment, 2)
+        value_type = hl7_to_str(segment, 2)
 
         if value_type in ("ED", "IS", "ST"):
             return True
 
         if value_type == "NM":
-            code = _str(segment, 3, 1) or _str(segment, 3)
+            code = hl7_to_str(segment, 3, 1) or hl7_to_str(segment, 3)
             if code in self._SKIP_OBX_CODES:
                 return True
 
@@ -180,11 +180,11 @@ class MindrayBC5150Profile(DeviceHL7Profile):
 
     def extract_patient_id(self, pid_segment) -> str | None:
         """BC-5150 PID-3 format: patientID^^^^MR — first component is the MRN."""
-        return _str(pid_segment, 3, 1) or _str(pid_segment, 3) or None
+        return hl7_to_str(pid_segment, 3, 1) or hl7_to_str(pid_segment, 3) or None
 
     def extract_specimen_from_obr(self, obr_segment) -> str | None:
         """OBR-3 (Filler Order Number) = sample ID / accession identifier."""
-        return _str(obr_segment, 3) or None
+        return hl7_to_str(obr_segment, 3) or None
 
     def build_worklist_response(
         self, orders: list[ORUData], original_control_id: str

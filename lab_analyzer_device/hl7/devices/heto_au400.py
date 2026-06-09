@@ -62,7 +62,7 @@ import hl7
 
 from lab_analyzer_device.hl7.devices.base import CommunicationMode, DeviceHL7Profile, LoincMapping
 from lab_analyzer_device.hl7.devices.registry import registry
-from lab_analyzer_device.hl7.extractor import ObservationData, ORUData, _str
+from lab_analyzer_device.hl7.extractor import ObservationData, ORUData, hl7_to_str
 
 
 class HetoAU400Profile(DeviceHL7Profile):
@@ -165,7 +165,7 @@ class HetoAU400Profile(DeviceHL7Profile):
         Keep NM and ST type OBX segments only.
         The AU400 only sends NM and ST results for patient samples.
         """
-        value_type = _str(segment, 2)
+        value_type = hl7_to_str(segment, 2)
         return value_type not in ("NM", "ST")
 
     def extract_observation_id(self, obx_segment) -> tuple[str, str]:
@@ -180,8 +180,8 @@ class HetoAU400Profile(DeviceHL7Profile):
 
         Returns: (code, display_name)
         """
-        obx3 = _str(obx_segment, 3).strip()
-        obx4 = _str(obx_segment, 4).strip()
+        obx3 = hl7_to_str(obx_segment, 3).strip()
+        obx4 = hl7_to_str(obx_segment, 4).strip()
 
         if obx3:
             # OBX-3 has a channel number; use it as code, OBX-4 as display
@@ -200,10 +200,10 @@ class HetoAU400Profile(DeviceHL7Profile):
         Documented format:
           OBX|1|NM||Tbil|100|umol/L|0-17.1|H||N|F||100|20070413093253||||
         """
-        set_id_str = _str(obx_segment, 1)
+        set_id_str = hl7_to_str(obx_segment, 1)
         set_id = int(set_id_str) if set_id_str.isdigit() else 0
 
-        value_type = _str(obx_segment, 2)
+        value_type = hl7_to_str(obx_segment, 2)
 
         # Extract code using device-specific logic (OBX-4 primary)
         code, display = self.extract_observation_id(obx_segment)
@@ -214,12 +214,12 @@ class HetoAU400Profile(DeviceHL7Profile):
         system, resolved_code, mapped_display = self.resolve_code(code, "")
         display = display or mapped_display
 
-        value = _str(obx_segment, 5)
+        value = hl7_to_str(obx_segment, 5)
         units = self.extract_units(obx_segment)
-        reference_range = _str(obx_segment, 7)
-        abnormal_flags = _str(obx_segment, 8)
-        result_status = _str(obx_segment, 11)
-        observation_datetime = _str(obx_segment, 14) or None
+        reference_range = hl7_to_str(obx_segment, 7)
+        abnormal_flags = hl7_to_str(obx_segment, 8)
+        result_status = hl7_to_str(obx_segment, 11)
+        observation_datetime = hl7_to_str(obx_segment, 14) or None
 
         return ObservationData(
             set_id=set_id,
@@ -240,7 +240,7 @@ class HetoAU400Profile(DeviceHL7Profile):
         OBR-2 (Placer Order Number) = sample barcode.
         Per doc: "Patient order number, used as sample barcode"
         """
-        return _str(obr_segment, 2) or None
+        return hl7_to_str(obr_segment, 2) or None
 
     def build_worklist_response(
         self, orders: list[ORUData], original_control_id: str

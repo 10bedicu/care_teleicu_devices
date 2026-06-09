@@ -61,7 +61,7 @@ class ORUData(BaseModel):
     tests: list[OrderedTest] = []
 
 
-def _str(segment, field: int, component: int = 0) -> str:
+def hl7_to_str(segment, field: int, component: int = 0) -> str:
     """
     Safely extract a string from an HL7 segment field/component using the hl7 library.
 

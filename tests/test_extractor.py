@@ -4,7 +4,7 @@ import unittest
 
 import hl7
 
-from lab_analyzer_device.hl7.extractor import ObservationData, ORUData, _str
+from lab_analyzer_device.hl7.extractor import ObservationData, ORUData, hl7_to_str
 
 
 class TestStrHelper(unittest.TestCase):
@@ -16,31 +16,31 @@ class TestStrHelper(unittest.TestCase):
 
     def test_extract_simple_field(self):
         msh = self.message.segment("MSH")
-        self.assertEqual(_str(msh, 3), "SENDER")
-        self.assertEqual(_str(msh, 4), "FAC")
+        self.assertEqual(hl7_to_str(msh, 3), "SENDER")
+        self.assertEqual(hl7_to_str(msh, 4), "FAC")
 
     def test_extract_component(self):
         obx = self.message.segment("OBX")
-        self.assertEqual(_str(obx, 3, 1), "WBC")
-        self.assertEqual(_str(obx, 3, 2), "White Blood Cells")
-        self.assertEqual(_str(obx, 3, 3), "LN")
+        self.assertEqual(hl7_to_str(obx, 3, 1), "WBC")
+        self.assertEqual(hl7_to_str(obx, 3, 2), "White Blood Cells")
+        self.assertEqual(hl7_to_str(obx, 3, 3), "LN")
 
     def test_out_of_bounds_field_returns_empty(self):
         msh = self.message.segment("MSH")
-        self.assertEqual(_str(msh, 99), "")
+        self.assertEqual(hl7_to_str(msh, 99), "")
 
     def test_out_of_bounds_component_returns_empty(self):
         obx = self.message.segment("OBX")
-        self.assertEqual(_str(obx, 3, 10), "")
+        self.assertEqual(hl7_to_str(obx, 3, 10), "")
 
     def test_empty_field_returns_empty(self):
         pid = self.message.segment("PID")
-        self.assertEqual(_str(pid, 4), "")
+        self.assertEqual(hl7_to_str(pid, 4), "")
 
     def test_numeric_field_as_string(self):
         obx = self.message.segment("OBX")
-        self.assertEqual(_str(obx, 1), "1")
-        self.assertEqual(_str(obx, 5), "7.2")
+        self.assertEqual(hl7_to_str(obx, 1), "1")
+        self.assertEqual(hl7_to_str(obx, 5), "7.2")
 
 
 class TestORUDataModel(unittest.TestCase):

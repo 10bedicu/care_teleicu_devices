@@ -7,7 +7,7 @@ from typing import Literal
 
 import hl7
 
-from lab_analyzer_device.hl7.extractor import ObservationData, OrderingPhysicianData, ORUData, _str
+from lab_analyzer_device.hl7.extractor import ObservationData, OrderingPhysicianData, ORUData, hl7_to_str
 from lab_analyzer_device.hl7.builder import ORMData, OrderedTest, OrderingPhysician
 
 
@@ -219,7 +219,7 @@ class DeviceHL7Profile(ABC):
         Override to filter out non-result OBX segments (reagent traceability,
         curves, histograms, etc.)
         """
-        value_type = _str(segment, 2)
+        value_type = hl7_to_str(segment, 2)
         # Skip encapsulated data (ED) by default — curves, reagent traceability
         return value_type == "ED"
 
@@ -285,7 +285,7 @@ class DeviceHL7Profile(ABC):
     def extract_patient_id(self, pid_segment) -> str | None:
         """Extract patient ID from PID segment. Override for custom formats."""
         # PID-3: Patient Identifier List — first component
-        return _str(pid_segment, 3, 1) or _str(pid_segment, 3) or None
+        return hl7_to_str(pid_segment, 3, 1) or hl7_to_str(pid_segment, 3) or None
 
     def extract_patient_name(self, pid_segment) -> str | None:
         """
@@ -294,8 +294,8 @@ class DeviceHL7Profile(ABC):
         PID-5 format: family_name^given_name^middle^suffix^prefix
         Returns "given_name family_name" or None.
         """
-        family_name = _str(pid_segment, 5, 1)
-        given_name = _str(pid_segment, 5, 2)
+        family_name = hl7_to_str(pid_segment, 5, 1)
+        given_name = hl7_to_str(pid_segment, 5, 2)
         if not family_name and not given_name:
             return None
         parts = [p for p in [given_name, family_name] if p]
@@ -307,12 +307,12 @@ class DeviceHL7Profile(ABC):
 
         Returns raw HL7 datetime string (YYYYMMDD or YYYYMMDDHHMMSS).
         """
-        return _str(pid_segment, 7) or None
+        return hl7_to_str(pid_segment, 7) or None
 
     def extract_order_numbers(self, obr_segment) -> tuple[str | None, str | None]:
         """Extract (placer_order_number, filler_order_number) from OBR."""
-        placer = _str(obr_segment, 2) or None
-        filler = _str(obr_segment, 3) or None
+        placer = hl7_to_str(obr_segment, 2) or None
+        filler = hl7_to_str(obr_segment, 3) or None
         return placer, filler
 
     def extract_ordering_physician(self, orc_segment) -> OrderingPhysicianData | None:
@@ -321,9 +321,9 @@ class DeviceHL7Profile(ABC):
 
         ORC-12 format: ID^family_name^given_name^...
         """
-        physician_id = _str(orc_segment, 12, 1)
-        family_name = _str(orc_segment, 12, 2)
-        given_name = _str(orc_segment, 12, 3)
+        physician_id = hl7_to_str(orc_segment, 12, 1)
+        family_name = hl7_to_str(orc_segment, 12, 2)
+        given_name = hl7_to_str(orc_segment, 12, 3)
         if not physician_id and not family_name:
             return None
         return OrderingPhysicianData(
@@ -338,9 +338,9 @@ class DeviceHL7Profile(ABC):
 
         OBR-16 format: ID^family_name^given_name^...
         """
-        physician_id = _str(obr_segment, 16, 1)
-        family_name = _str(obr_segment, 16, 2)
-        given_name = _str(obr_segment, 16, 3)
+        physician_id = hl7_to_str(obr_segment, 16, 1)
+        family_name = hl7_to_str(obr_segment, 16, 2)
+        given_name = hl7_to_str(obr_segment, 16, 3)
         if not physician_id and not family_name:
             return None
         return OrderingPhysicianData(
@@ -351,11 +351,11 @@ class DeviceHL7Profile(ABC):
 
     def extract_specimen_from_obr(self, obr_segment) -> str | None:
         """Extract specimen info from OBR-15 (older HL7 versions)."""
-        return _str(obr_segment, 15, 1) or None
+        return hl7_to_str(obr_segment, 15, 1) or None
 
     def extract_specimen_from_spm(self, spm_segment) -> str | None:
         """Extract specimen ID from SPM-2."""
-        return _str(spm_segment, 2, 1) or _str(spm_segment, 2) or None
+        return hl7_to_str(spm_segment, 2, 1) or hl7_to_str(spm_segment, 2) or None
 
     def extract_units(self, obx_segment) -> str:
         """
@@ -366,19 +366,19 @@ class DeviceHL7Profile(ABC):
         proper HL7 escaping. Device profiles with properly-encoded CE fields
         can override to use component 1.
         """
-        return _str(obx_segment, 6)
+        return hl7_to_str(obx_segment, 6)
 
     def extract_observation(self, obx_segment) -> ObservationData | None:
         """Extract a single observation from an OBX segment."""
-        set_id_str = _str(obx_segment, 1)
+        set_id_str = hl7_to_str(obx_segment, 1)
         set_id = int(set_id_str) if set_id_str.isdigit() else 0
 
-        value_type = _str(obx_segment, 2)
+        value_type = hl7_to_str(obx_segment, 2)
 
         # OBX-3: Observation Identifier (code^display^system)
-        raw_code = _str(obx_segment, 3, 1)
-        raw_display = _str(obx_segment, 3, 2)
-        raw_system = _str(obx_segment, 3, 3)
+        raw_code = hl7_to_str(obx_segment, 3, 1)
+        raw_display = hl7_to_str(obx_segment, 3, 2)
+        raw_system = hl7_to_str(obx_segment, 3, 3)
 
         if not raw_code:
             return None
@@ -386,12 +386,12 @@ class DeviceHL7Profile(ABC):
         system, code, mapped_display = self.resolve_code(raw_code, raw_system)
         display = raw_display or mapped_display
 
-        value = _str(obx_segment, 5)
+        value = hl7_to_str(obx_segment, 5)
         units = self.extract_units(obx_segment)
-        reference_range = _str(obx_segment, 7)
-        abnormal_flags = _str(obx_segment, 8)
-        result_status = _str(obx_segment, 11)
-        observation_datetime = _str(obx_segment, 14) or None
+        reference_range = hl7_to_str(obx_segment, 7)
+        abnormal_flags = hl7_to_str(obx_segment, 8)
+        result_status = hl7_to_str(obx_segment, 11)
+        observation_datetime = hl7_to_str(obx_segment, 14) or None
 
         return ObservationData(
             set_id=set_id,

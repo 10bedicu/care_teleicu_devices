@@ -28,7 +28,7 @@ import hl7
 
 from lab_analyzer_device.hl7.devices.base import DeviceHL7Profile, LoincMapping
 from lab_analyzer_device.hl7.devices.registry import registry
-from lab_analyzer_device.hl7.extractor import ObservationData, _str
+from lab_analyzer_device.hl7.extractor import ObservationData, hl7_to_str
 from lab_analyzer_device.hl7.builder import ORMData
 
 
@@ -147,7 +147,7 @@ class HoribaYumizenH500Profile(DeviceHL7Profile):
         Yumizen H500 sends properly-encoded CE fields for OBX-6 (units).
         Use component 1 (the UCUM identifier) which uses '*' for exponents.
         """
-        return _str(obx_segment, 6, 1) or _str(obx_segment, 6)
+        return hl7_to_str(obx_segment, 6, 1) or hl7_to_str(obx_segment, 6)
 
     # Non-result OBX identifiers to skip
     _SKIP_OBX_IDENTIFIERS = {
@@ -161,12 +161,12 @@ class HoribaYumizenH500Profile(DeviceHL7Profile):
         - ED (Encapsulated Data): reagent traceability, curves, histograms
         - ST with "Dosage category": patient profile classification
         """
-        value_type = _str(segment, 2)
+        value_type = hl7_to_str(segment, 2)
         if value_type == "ED":
             return True
 
         # Check observation identifier for known non-result fields
-        obs_id = _str(segment, 3, 2) or _str(segment, 3, 1) or _str(segment, 3)
+        obs_id = hl7_to_str(segment, 3, 2) or hl7_to_str(segment, 3, 1) or hl7_to_str(segment, 3)
         if obs_id in self._SKIP_OBX_IDENTIFIERS:
             return True
 
@@ -179,7 +179,7 @@ class HoribaYumizenH500Profile(DeviceHL7Profile):
         Yumizen PID-3 format: ID^^^^PI
         First component is the patient ID, fifth is the type code (PI).
         """
-        return _str(pid_segment, 3, 1) or None
+        return hl7_to_str(pid_segment, 3, 1) or None
 
     # --- Specimen extraction ---
 
@@ -189,7 +189,7 @@ class HoribaYumizenH500Profile(DeviceHL7Profile):
 
     def extract_specimen_from_spm(self, spm_segment) -> str | None:
         """SPM-2: Specimen ID."""
-        return _str(spm_segment, 2) or None
+        return hl7_to_str(spm_segment, 2) or None
 
     # --- Observation extraction ---
 
@@ -207,7 +207,7 @@ class HoribaYumizenH500Profile(DeviceHL7Profile):
 
         # Parse Yumizen reference range: "4.20 - 6.00^REFERENCE_RANGE"
         # Extract just the range values (component 1), drop the type label
-        raw_range = _str(obx_segment, 7)
+        raw_range = hl7_to_str(obx_segment, 7)
         if "^" in raw_range:
             range_parts = raw_range.split("^")
             range_value = range_parts[0].strip()
@@ -215,11 +215,11 @@ class HoribaYumizenH500Profile(DeviceHL7Profile):
             range_value = raw_range
 
         # Parse abnormal flags — Yumizen may append ~ (repetition separator)
-        raw_flags = _str(obx_segment, 8)
+        raw_flags = hl7_to_str(obx_segment, 8)
         flags = raw_flags.rstrip("~").strip()
 
         # Yumizen uses OBX-19 for analysis datetime
-        obs_datetime = _str(obx_segment, 19) or _str(obx_segment, 14) or None
+        obs_datetime = hl7_to_str(obx_segment, 19) or hl7_to_str(obx_segment, 14) or None
 
         return ObservationData(
             set_id=obs.set_id,

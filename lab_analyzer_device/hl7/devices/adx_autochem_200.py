@@ -37,7 +37,7 @@ import hl7
 
 from lab_analyzer_device.hl7.devices.base import CommunicationMode, DeviceHL7Profile, LoincMapping
 from lab_analyzer_device.hl7.devices.registry import registry
-from lab_analyzer_device.hl7.extractor import ORUData, _str
+from lab_analyzer_device.hl7.extractor import ORUData, hl7_to_str
 
 
 class AdxAutoChem200Profile(DeviceHL7Profile):
@@ -137,7 +137,7 @@ class AdxAutoChem200Profile(DeviceHL7Profile):
         Keep NM and ST type OBX segments only.
         Skip ED (embedded data) if the analyzer sends any.
         """
-        value_type = _str(segment, 2)
+        value_type = hl7_to_str(segment, 2)
         if value_type in ("NM", "ST"):
             return False
         return True
@@ -150,7 +150,7 @@ class AdxAutoChem200Profile(DeviceHL7Profile):
         Example: OBX|1|NM|1^ALBUMIN||4.2|g/dL|3.5-5.3|N|||F
         Returns: ("1", "ALBUMIN")
         """
-        obx3 = _str(obx_segment, 3)
+        obx3 = hl7_to_str(obx_segment, 3)
         parts = obx3.split("^", 1) if obx3 else ["", ""]
         code = parts[0].strip()
         display = parts[1].strip() if len(parts) > 1 else ""

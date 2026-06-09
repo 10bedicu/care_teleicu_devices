@@ -29,7 +29,7 @@ import hl7
 
 from lab_analyzer_device.hl7.devices.base import CommunicationMode, DeviceHL7Profile, LoincMapping
 from lab_analyzer_device.hl7.devices.registry import registry
-from lab_analyzer_device.hl7.extractor import ORUData, _str
+from lab_analyzer_device.hl7.extractor import ORUData, hl7_to_str
 
 
 class CellQuantBF6900Profile(DeviceHL7Profile):
@@ -115,7 +115,7 @@ class CellQuantBF6900Profile(DeviceHL7Profile):
         - ED type: histograms/scattergrams (2101, 2102, 2033, 2034)
         - IS type: analysis mode metadata (2001–2005)
         """
-        value_type = _str(segment, 2)
+        value_type = hl7_to_str(segment, 2)
         if value_type == "ED":
             return True
         if value_type == "IS":
@@ -127,7 +127,7 @@ class CellQuantBF6900Profile(DeviceHL7Profile):
         BF-6900 PID-3: Case number (single value, no type code).
         Example: PID|1||7393670||Liu Jia|||F|...|25^Y
         """
-        return _str(pid_segment, 3) or None
+        return hl7_to_str(pid_segment, 3) or None
 
     def build_worklist_response(
         self, orders: list[ORUData], original_control_id: str
