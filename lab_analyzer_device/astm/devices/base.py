@@ -20,6 +20,7 @@ from lab_analyzer_device.hl7.extractor import (
 )
 
 CommunicationMode = Literal["unidirectional", "host_query", "download"]
+AstmConnectionMode = Literal["inbound", "outbound"]
 
 
 class DeviceASTMProfile(ABC):
@@ -53,6 +54,49 @@ class DeviceASTMProfile(ABC):
         return self.communication_mode == "host_query"
 
     @property
+    def astm_connection_mode(self) -> AstmConnectionMode:
+        """TCP transport role for ASTM over Ethernet.
+
+        - ``inbound``: analyzer connects to the gateway listener.
+        - ``outbound``: gateway dials out to the analyzer.
+        """
+        return "outbound"
+
+    @property
+    def default_oru_port(self) -> int:
+        return 2575
+
+    @property
+    def default_baud_rate(self) -> int:
+        return 9600
+
+    @property
+    def default_data_bits(self) -> int:
+        return 8
+
+    @property
+    def default_parity(self) -> str:
+        return "N"
+
+    @property
+    def default_stop_bits(self) -> float:
+        return 1
+
+    @property
+    def default_flow_control(self) -> str:
+        return "none"
+
+    def serial_default_fields(self) -> dict[str, int | float | str]:
+        """Serial line defaults for metadata API and device configuration."""
+        return {
+            "default_baud_rate": self.default_baud_rate,
+            "default_data_bits": self.default_data_bits,
+            "default_parity": self.default_parity,
+            "default_stop_bits": self.default_stop_bits,
+            "default_flow_control": self.default_flow_control,
+        }
+
+    @property
     def code_mappings(self) -> dict[str, LoincMapping]:
         """Device-specific code → LOINC mappings. Override per device."""
         return {}
@@ -82,6 +126,10 @@ class DeviceASTMProfile(ABC):
             mapping = mappings[code]
             return mapping.system, mapping.loinc_code, mapping.display
         return "local", code, ""
+
+    def should_skip_result(self, data: ORUData) -> bool:
+        """Return True when the result should be stored but not clinically processed."""
+        return False
 
     # -- result extraction --------------------------------------------
 

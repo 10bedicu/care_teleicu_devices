@@ -21,6 +21,7 @@ def _known_device_types() -> set[str]:
 
 OrmMode = Literal["shared", "client", "server"]
 Hl7ConnectionMode = Literal["inbound", "outbound"]
+AstmConnectionMode = Literal["inbound", "outbound"]
 Transport = Literal["ethernet", "serial"]
 Protocol = Literal["hl7", "astm"]
 Parity = Literal["N", "E", "O", "M", "S"]
@@ -46,6 +47,7 @@ class LabAnalyzerDeviceMetadataReadSpec(BaseModel):
     orm_port: int | None = None  # only used when orm_mode="client"
     orm_mode: OrmMode = "shared"
     hl7_connection_mode: Hl7ConnectionMode = "inbound"
+    astm_connection_mode: AstmConnectionMode = "outbound"
     # Serial (RS232) line settings — only used when transport="serial"
     serial_port: str | None = None
     baud_rate: int | None = 9600
@@ -83,6 +85,19 @@ class LabAnalyzerDeviceMetadataReadSpec(BaseModel):
             self.oru_port = profile.default_oru_port
         return self
 
+    @model_validator(mode="after")
+    def apply_astm_profile_defaults(self):
+        if self.protocol != "astm":
+            return self
+        from lab_analyzer_device.astm.devices.registry import registry as astm_registry
+
+        profile = astm_registry.get_profile(self.type)
+        if self.astm_connection_mode == "outbound" and profile.astm_connection_mode != "outbound":
+            self.astm_connection_mode = profile.astm_connection_mode
+        if self.oru_port in (None, 2575) and profile.default_oru_port != 2575:
+            self.oru_port = profile.default_oru_port
+        return self
+
 
 class LabAnalyzerDeviceMetadataWriteSpec(BaseModel):
     type: str = "generic"
@@ -94,6 +109,7 @@ class LabAnalyzerDeviceMetadataWriteSpec(BaseModel):
     orm_port: int | None = None  # only used when orm_mode="client"
     orm_mode: OrmMode = "shared"
     hl7_connection_mode: Hl7ConnectionMode | None = None
+    astm_connection_mode: AstmConnectionMode | None = None
     # Serial (RS232) line settings — only used when transport="serial"
     serial_port: str | None = None
     baud_rate: int | None = 9600
@@ -162,6 +178,11 @@ class LabAnalyzerDeviceMetadataWriteSpec(BaseModel):
 
         return registry.get_profile(self.type)
 
+    def _astm_profile(self):
+        from lab_analyzer_device.astm.devices.registry import registry as astm_registry
+
+        return astm_registry.get_profile(self.type)
+
     @model_validator(mode="after")
     def apply_hl7_profile_defaults(self):
         if self.protocol != "hl7":
@@ -176,6 +197,30 @@ class LabAnalyzerDeviceMetadataWriteSpec(BaseModel):
         if self.hl7_connection_mode == "outbound":
             self.orm_mode = "shared"
             self.orm_port = None
+        return self
+
+    @model_validator(mode="after")
+    def apply_astm_profile_defaults(self):
+        if self.protocol != "astm":
+            return self
+        profile = self._astm_profile()
+        if self.astm_connection_mode is None:
+            self.astm_connection_mode = profile.astm_connection_mode
+        if self.oru_port is None or (
+            self.oru_port == 2575 and profile.default_oru_port != 2575
+        ):
+            self.oru_port = profile.default_oru_port
+        if self.transport == "serial":
+            if self.baud_rate is None or self.baud_rate == 9600:
+                self.baud_rate = profile.default_baud_rate
+            if self.data_bits is None or self.data_bits == 8:
+                self.data_bits = profile.default_data_bits
+            if self.parity is None or self.parity == "N":
+                self.parity = profile.default_parity
+            if self.stop_bits is None or self.stop_bits == 1:
+                self.stop_bits = profile.default_stop_bits
+            if self.flow_control is None or self.flow_control == "none":
+                self.flow_control = profile.default_flow_control
         return self
 
     @model_validator(mode="after")

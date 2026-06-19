@@ -54,6 +54,7 @@ class DeviceConfigSpec(BaseModel):
     orm_port: int | None = None
     orm_mode: str = "shared"
     hl7_connection_mode: str = "inbound"
+    astm_connection_mode: str = "outbound"
     type: str = "generic"
     # Serial (RS232) line settings — only used when transport="serial"
     serial_port: str | None = None
@@ -92,7 +93,12 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
         devices = []
         for d in queryset:
             device_type = d.metadata.get("type", "generic")
-            profile = registry.get_profile(device_type)
+            protocol = d.metadata.get("protocol", "hl7")
+            profile = (
+                astm_registry.get_profile(device_type)
+                if protocol == "astm"
+                else registry.get_profile(device_type)
+            )
             transport = d.metadata.get("transport", "ethernet")
             serial_fields = (
                 {
@@ -120,13 +126,18 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
                     id=str(d.external_id),
                     registered_name=d.registered_name,
                     transport=transport,
-                    protocol=d.metadata.get("protocol", "hl7"),
+                    protocol=protocol,
                     endpoint_address=d.metadata.get("endpoint_address"),
                     oru_port=d.metadata.get("oru_port", profile.default_oru_port),
                     orm_port=d.metadata.get("orm_port"),
                     orm_mode=d.metadata.get("orm_mode", "shared"),
                     hl7_connection_mode=d.metadata.get(
-                        "hl7_connection_mode", profile.hl7_connection_mode
+                        "hl7_connection_mode",
+                        getattr(profile, "hl7_connection_mode", "inbound"),
+                    ),
+                    astm_connection_mode=d.metadata.get(
+                        "astm_connection_mode",
+                        getattr(profile, "astm_connection_mode", "outbound"),
                     ),
                     type=device_type,
                     **serial_fields,
@@ -196,6 +207,25 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
 
         control_id = str(uuid.uuid4())
         oru_data = extract_astm_data(records, device_type, device.metadata)
+        profile = astm_registry.get_profile(device_type)
+
+        if profile.should_skip_result(oru_data):
+            lab_message = LabMessage.objects.create(
+                device=device,
+                message_type=MessageType.ORU,
+                message_control_id=control_id,
+                raw_message=data.raw_message,
+                parsed_data=oru_data.model_dump(mode="json"),
+                status=MessageStatus.PROCESSED,
+                error_details="Skipped: internal validation sample",
+            )
+            return Response(
+                {
+                    "message": "skipped",
+                    "reason": "validation_sample",
+                    "lab_message_id": str(lab_message.external_id),
+                }
+            )
 
         ctx = resolve_patient_context(oru_data, device)
         if not is_context_in_device_facility(ctx, device):
