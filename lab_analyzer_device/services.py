@@ -200,6 +200,7 @@ def create_diagnostic_report(
     device_type=None,
     protocol=None,
     device=None,
+    lab_message=None,
 ):
     """
     Create or update a DiagnosticReport from parsed ORU data.
@@ -264,6 +265,15 @@ def create_diagnostic_report(
         # If no observation exists on the draft report, fall through to create one
     else:
         # Create new preliminary report
+        meta = {}
+        if device and lab_message:
+            meta = {
+                "automation": {
+                    "device": device.external_id,
+                    "protocol": protocol,
+                    "raw_message": lab_message.external_id,
+                }
+            }
         report = DiagnosticReport.objects.create(
             status="preliminary",
             patient=patient,
@@ -272,6 +282,7 @@ def create_diagnostic_report(
             facility=encounter.facility,
             code=report_code,
             category={"code": "LAB", "system": "http://terminology.hl7.org/CodeSystem/v2-0074", "display": "Laboratory"},
+            meta=meta,
         )
 
     # Create observation for the report

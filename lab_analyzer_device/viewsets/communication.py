@@ -1,3 +1,4 @@
+from lab_analyzer_device.models.message import Protocol
 import logging
 import uuid
 
@@ -213,6 +214,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
             lab_message = LabMessage.objects.create(
                 device=device,
                 message_type=MessageType.ORU,
+                protocol=Protocol.ASTM,
                 message_control_id=control_id,
                 raw_message=data.raw_message,
                 parsed_data=oru_data.model_dump(mode="json"),
@@ -242,6 +244,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
             encounter=ctx.encounter,
             specimen=ctx.specimen,
             message_type=MessageType.ORU,
+            protocol=Protocol.ASTM,
             message_control_id=control_id,
             raw_message=data.raw_message,
             parsed_data=oru_data.model_dump(mode="json"),
@@ -250,15 +253,17 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
 
         if ctx.patient and ctx.encounter:
             try:
-                create_diagnostic_report(
+                diagnostic_report = create_diagnostic_report(
                     oru_data, ctx.patient, ctx.encounter,
                     ctx.service_request, request.user,
                     device_type=device_type,
                     protocol=protocol,
                     device=device,
+                    lab_message=lab_message,
                 )
                 lab_message.status = MessageStatus.PROCESSED
-                lab_message.save(update_fields=["status"])
+                lab_message.diagnostic_report = diagnostic_report
+                lab_message.save(update_fields=["status", "diagnostic_report"])
             except Exception as e:
                 logger.exception("Failed to process ASTM results")
                 lab_message.status = MessageStatus.ERROR
@@ -279,6 +284,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
             LabMessage.objects.create(
                 device=device,
                 message_type=MessageType.ORU,
+                protocol=Protocol.HL7,
                 message_control_id="PARSE_ERROR",
                 raw_message=data.raw_message,
                 status=MessageStatus.ERROR,
@@ -321,6 +327,7 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
             encounter=ctx.encounter,
             specimen=ctx.specimen,
             message_type=MessageType.ORU,
+            protocol=Protocol.HL7,
             message_control_id=control_id,
             raw_message=data.raw_message,
             parsed_data=oru_data.model_dump(mode="json"),
@@ -329,15 +336,17 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
 
         if ctx.patient and ctx.encounter:
             try:
-                create_diagnostic_report(
+                diagnostic_report = create_diagnostic_report(
                     oru_data, ctx.patient, ctx.encounter,
                     ctx.service_request, request.user,
                     device_type=device_type,
                     protocol=protocol,
                     device=device,
+                    lab_message=lab_message,
                 )
                 lab_message.status = MessageStatus.PROCESSED
-                lab_message.save(update_fields=["status"])
+                lab_message.diagnostic_report = diagnostic_report
+                lab_message.save(update_fields=["status", "diagnostic_report"])
             except Exception as e:
                 logger.exception("Failed to process ORU results")
                 lab_message.status = MessageStatus.ERROR

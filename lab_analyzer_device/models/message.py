@@ -18,6 +18,9 @@ class MessageStatus(models.TextChoices):
     REJECTED = "rejected", "Rejected"
     ERROR = "error", "Error"
 
+class Protocol(models.TextChoices):
+    HL7 = "hl7", "HL7"
+    ASTM = "astm", "ASTM"
 
 class LabMessage(EMRBaseModel):
     device = models.ForeignKey(
@@ -44,6 +47,14 @@ class LabMessage(EMRBaseModel):
         blank=True,
         related_name="lab_messages",
     )
+    diagnostic_report = models.ForeignKey(
+        "emr.DiagnosticReport",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="lab_messages",
+    )
+    protocol = models.CharField(max_length=10, choices=Protocol.choices)
     message_type = models.CharField(max_length=10, choices=MessageType.choices)
     message_control_id = models.CharField(max_length=199)
     raw_message = models.TextField()
