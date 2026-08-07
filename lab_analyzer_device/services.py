@@ -269,9 +269,9 @@ def create_diagnostic_report(
         if device and lab_message:
             meta = {
                 "automation": {
-                    "device": device.external_id,
+                    "device": str(device.external_id),
                     "protocol": protocol,
-                    "raw_message": lab_message.external_id,
+                    "raw_message": str(lab_message.external_id),
                 }
             }
         report = DiagnosticReport.objects.create(
