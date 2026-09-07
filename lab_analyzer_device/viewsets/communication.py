@@ -9,7 +9,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from care.emr.models import Device
+from care.emr.models import ActivityDefinition, Device
+from care.emr.models.observation_definition import ObservationDefinition
+from care.utils.pagination.care_pagination import CareLimitOffsetPagination
 from lab_analyzer_device.astm import codec as astm_codec
 from lab_analyzer_device.astm.devices.registry import registry as astm_registry
 from lab_analyzer_device.astm.extractor import extract_astm_data
@@ -26,6 +28,12 @@ from lab_analyzer_device.services import (
     create_diagnostic_report,
     lookup_pending_orders,
     resolve_patient_context,
+)
+from lab_analyzer_device.spec import (
+    GatewayActivityDefinitionReadSpec,
+    GatewayObservationDefinitionReadSpec,
+    serialize_gateway_activity_definition,
+    serialize_gateway_observation_definition,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +78,18 @@ class DeviceConfigListResponse(RootModel[list[DeviceConfigSpec]]):
     pass
 
 
+class GatewayActivityDefinitionListResponse(
+    RootModel[list[GatewayActivityDefinitionReadSpec]]
+):
+    pass
+
+
+class GatewayObservationDefinitionListResponse(
+    RootModel[list[GatewayObservationDefinitionReadSpec]]
+):
+    pass
+
+
 class LabAnalyzerCommunicationViewSet(GenericViewSet):
     """
     Gateway-authenticated endpoints for inbound lab analyzer communication.
@@ -80,9 +100,55 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
     queryset = Device.objects.filter(care_type="lab-analyzer")
     lookup_field = "external_id"
     authentication_classes = (LabAnalyzerAuthentication,)
+    pagination_class = CareLimitOffsetPagination
 
     def get_queryset(self):
         return get_gateway_linked_analyzers(self.request.gateway)
+
+    def _paginate(self, queryset, serializer):
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response([serializer(obj) for obj in page])
+        return Response([serializer(obj) for obj in queryset])
+
+    def _activity_definition_queryset(self, request):
+        params = request.query_params
+        qs = ActivityDefinition.objects.filter(
+            facility_id=request.gateway.facility_id,
+            classification=params.get("classification", "laboratory"),
+            status=params.get("status", "active"),
+        )
+        latest = params.get("latest", "true").lower()
+        if latest in ("1", "true", "yes"):
+            qs = qs.filter(latest=True)
+        elif latest in ("0", "false", "no"):
+            qs = qs.filter(latest=False)
+
+        title = params.get("title")
+        if title:
+            qs = qs.filter(title__icontains=title)
+        kind = params.get("kind")
+        if kind:
+            qs = qs.filter(kind__iexact=kind)
+        code = params.get("code")
+        if code:
+            qs = qs.filter(code__code=code)
+        return qs.order_by("title")
+
+    def _observation_definition_queryset(self, request):
+        params = request.query_params
+        qs = ObservationDefinition.objects.filter(
+            facility_id=request.gateway.facility_id,
+            category=params.get("category", "laboratory"),
+            status=params.get("status", "active"),
+        )
+        title = params.get("title")
+        if title:
+            qs = qs.filter(title__icontains=title)
+        code = params.get("code")
+        if code:
+            qs = qs.filter(code__code=code)
+        return qs.order_by("title")
 
     @extend_schema(
         description="List all lab analyzer devices configured for this gateway.",
@@ -146,6 +212,53 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
             )
         return Response(devices)
 
+    @extend_schema(
+        description=(
+            "List Activity Definitions for the gateway's facility. "
+            "Facility is resolved from X-Gateway-Id. Defaults to laboratory / active. "
+            "Supports limit/offset pagination and filters."
+        ),
+        responses={200: GatewayActivityDefinitionListResponse},
+    )
+    @action(detail=False, methods=["get"])
+    def activity_definitions(self, request, *args, **kwargs):
+        """Return facility Activity Definitions for the authenticated gateway."""
+        queryset = self._activity_definition_queryset(request)
+
+        def serialize_page(page):
+            od_ids: set[int] = set()
+            for ad in page:
+                od_ids.update(ad.observation_result_requirements or [])
+            observation_definitions_by_id = {
+                od.id: od
+                for od in ObservationDefinition.objects.filter(id__in=od_ids)
+            }
+            return [
+                serialize_gateway_activity_definition(
+                    ad, observation_definitions_by_id
+                )
+                for ad in page
+            ]
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(serialize_page(page))
+        return Response(serialize_page(list(queryset)))
+
+    @extend_schema(
+        description=(
+            "List Observation Definitions for the gateway's facility. "
+            "Facility is resolved from X-Gateway-Id. Defaults to laboratory / active. "
+            "Supports limit/offset pagination and filters."
+        ),
+        responses={200: GatewayObservationDefinitionListResponse},
+    )
+    @action(detail=False, methods=["get"])
+    def observation_definitions(self, request, *args, **kwargs):
+        """Return facility Observation Definitions for the authenticated gateway."""
+        queryset = self._observation_definition_queryset(request)
+        return self._paginate(queryset, serialize_gateway_observation_definition)
+
     def resolve_device(self, sender_ip, sender_device_id=None):
         """Resolve a lab analyzer device within this gateway.
 
@@ -154,9 +267,19 @@ class LabAnalyzerCommunicationViewSet(GenericViewSet):
         ``endpoint_address`` IP for Ethernet devices.
         """
         if sender_device_id:
-            device = self.get_queryset().filter(external_id=sender_device_id).first()
-            if device:
-                return device
+            try:
+                uuid.UUID(str(sender_device_id))
+            except (ValueError, TypeError, AttributeError):
+                # Older gateway retries mistakenly sent the peer IP here.
+                logger.warning(
+                    "Ignoring non-UUID sender_device_id=%s; falling back to sender_ip=%s",
+                    sender_device_id,
+                    sender_ip,
+                )
+            else:
+                device = self.get_queryset().filter(external_id=sender_device_id).first()
+                if device:
+                    return device
         device = self.get_queryset().filter(
             metadata__endpoint_address=sender_ip
         ).first()

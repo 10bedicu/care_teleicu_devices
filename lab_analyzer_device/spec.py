@@ -1,6 +1,7 @@
+import datetime
 from typing import Literal
 
-from pydantic import BaseModel, UUID4, field_validator, model_validator
+from pydantic import BaseModel, UUID4, Field, field_validator, model_validator
 
 from care.emr.models import ActivityDefinition
 from care.emr.models.device import Device
@@ -327,6 +328,8 @@ class LabMessageReadSpec(EMRResource):
     parsed_data: dict
     status: str
     error_details: str | None = None
+    created_date: datetime.datetime
+    modified_date: datetime.datetime
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj, *args, **kwargs):
@@ -334,3 +337,96 @@ class LabMessageReadSpec(EMRResource):
         mapping["device_id"] = obj.device.external_id
         mapping["patient_id"] = obj.patient.external_id if obj.patient else None
         mapping["encounter_id"] = obj.encounter.external_id if obj.encounter else None
+
+
+# ---------------------------------------------------------------------------
+# Gateway Test Master catalog (read-only)
+# ---------------------------------------------------------------------------
+
+
+def _as_coding(value) -> dict | None:
+    """Normalize a coding JSONField / dict into {system, code, display}."""
+    if not value or not isinstance(value, dict):
+        return None
+    return {
+        "system": value.get("system"),
+        "code": value.get("code"),
+        "display": value.get("display"),
+    }
+
+
+class GatewayObservationParameterSpec(BaseModel):
+    code: dict | None = None
+    permitted_data_type: str
+    permitted_unit: dict | None = None
+    qualified_ranges: list = Field(default_factory=list)
+
+
+class GatewayObservationDefinitionReadSpec(BaseModel):
+    id: str
+    slug: str
+    title: str
+    status: str
+    category: str | None = None
+    code: dict | None = None
+    permitted_data_type: str
+    permitted_unit: dict | None = None
+    parameters: list[GatewayObservationParameterSpec] = Field(default_factory=list)
+
+
+class GatewayActivityDefinitionReadSpec(BaseModel):
+    id: str
+    slug: str
+    title: str
+    status: str
+    classification: str
+    code: dict | None = None
+    observation_definitions: list[GatewayObservationDefinitionReadSpec] = Field(
+        default_factory=list
+    )
+
+
+def serialize_gateway_observation_definition(od) -> dict:
+    """Serialize an ObservationDefinition for the gateway Test Master API."""
+    parameters = []
+    for component in od.component or []:
+        if not isinstance(component, dict):
+            continue
+        parameters.append(
+            GatewayObservationParameterSpec(
+                code=_as_coding(component.get("code")),
+                permitted_data_type=component.get("permitted_data_type") or "",
+                permitted_unit=_as_coding(component.get("permitted_unit")),
+                qualified_ranges=component.get("qualified_ranges") or [],
+            )
+        )
+    return GatewayObservationDefinitionReadSpec(
+        id=str(od.external_id),
+        slug=od.slug,
+        title=od.title,
+        status=od.status,
+        category=od.category,
+        code=_as_coding(od.code),
+        permitted_data_type=od.permitted_data_type,
+        permitted_unit=_as_coding(od.permitted_unit),
+        parameters=parameters,
+    ).model_dump(mode="json")
+
+
+def serialize_gateway_activity_definition(ad, observation_definitions_by_id: dict) -> dict:
+    """Serialize an ActivityDefinition with nested ObservationDefinitions."""
+    nested = []
+    for od_pk in ad.observation_result_requirements or []:
+        od = observation_definitions_by_id.get(od_pk)
+        if od is None:
+            continue
+        nested.append(serialize_gateway_observation_definition(od))
+    return GatewayActivityDefinitionReadSpec(
+        id=str(ad.external_id),
+        slug=ad.slug,
+        title=ad.title,
+        status=ad.status,
+        classification=ad.classification,
+        code=_as_coding(ad.code),
+        observation_definitions=nested,
+    ).model_dump(mode="json")
