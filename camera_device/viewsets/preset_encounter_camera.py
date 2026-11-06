@@ -39,6 +39,7 @@ class PresetEncounterCameraViewSet(EMRModelReadOnlyViewSet):
             .filter(
                 care_type="camera",
                 position_presets__location=location,
+                position_presets__deleted=False,
             )
             .distinct("id")
         )
